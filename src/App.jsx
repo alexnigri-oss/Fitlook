@@ -239,6 +239,20 @@ export default function App() {
 
   const filteredWardrobe = wardrobe.filter(i => i.category === activeCat);
 
+  function handleImportJSON(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const items = JSON.parse(ev.target.result);
+        const updated = [...wardrobe, ...items.filter(i => !wardrobe.find(w => w.id === i.id))];
+        setWardrobe(updated); saveWardrobe(updated);
+        alert(`${items.length} peças importadas com sucesso!`);
+      } catch { alert("Erro ao importar. Verifique o arquivo JSON."); }
+    };
+    reader.readAsText(file);
+  }
+
   function openAddModal() { setForm({ name: "", description: "", category: activeCat, photo: null }); setShowModal(true); }
 
   function handlePhoto(e) {
@@ -429,7 +443,15 @@ export default function App() {
               </div>
             )}
           </div>
-          <button style={S.addBtn} onClick={openAddModal}>+</button>
+          <input type="file" accept=".json" style={{ display: "none" }} id="importJson" onChange={handleImportJSON} />
+          <div style={{ position: "fixed", bottom: 96, right: 80, display: "flex", gap: 10 }}>
+            <button
+              style={{ ...S.addBtn, position: "static", background: "#1A1A1A", border: "1px solid #2A2A2A", fontSize: 18 }}
+              onClick={() => document.getElementById("importJson").click()}
+              title="Importar JSON"
+            >📥</button>
+            <button style={{ ...S.addBtn, position: "static" }} onClick={openAddModal}>+</button>
+          </div>
         </>
       )}
 
