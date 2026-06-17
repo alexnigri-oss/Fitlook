@@ -294,6 +294,18 @@ export default function App() {
     e.target.value = "";
   }
 
+  function handleExportJSON() {
+    const data = JSON.stringify(wardrobe, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `fitlook-backup-${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const canGenerate = workout && wardrobe.length >= 3 && weather && !generating;
 
   return (
@@ -467,7 +479,8 @@ export default function App() {
           <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportJSON} />
           <div style={S.fabRow}>
             <button style={S.fabBtn(false)} onClick={openAddModal} title="Adicionar peça">+</button>
-            <button style={S.fabBtn(true)} onClick={() => importRef.current.click()} title="Importar JSON">📥</button>
+            <button style={S.fabBtn(true)} onClick={() => importRef.current.click()} title="Importar backup">📥</button>
+            <button style={S.fabBtn(true)} onClick={handleExportJSON} title="Exportar backup">📤</button>
           </div>
         </>
       )}
