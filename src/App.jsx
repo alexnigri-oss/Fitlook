@@ -3,10 +3,8 @@ import { useState, useEffect, useRef } from "react";
 const STORAGE_KEY = "fitlook_wardrobe";
 
 function loadWardrobe() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch { return []; }
+  try { const data = localStorage.getItem(STORAGE_KEY); return data ? JSON.parse(data) : []; }
+  catch { return []; }
 }
 
 function saveWardrobe(items) {
@@ -16,15 +14,13 @@ function saveWardrobe(items) {
 
 async function fetchWeatherByCoords(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode,windspeed_10m&timezone=auto`;
-  const r = await fetch(url);
-  const d = await r.json();
+  const r = await fetch(url); const d = await r.json();
   return { temp: Math.round(d.current.temperature_2m), code: d.current.weathercode, wind: Math.round(d.current.windspeed_10m) };
 }
 
 async function fetchWeatherByCity(city) {
   const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=pt&format=json`;
-  const geoR = await fetch(geoUrl);
-  const geoD = await geoR.json();
+  const geoR = await fetch(geoUrl); const geoD = await geoR.json();
   if (!geoD.results?.length) throw new Error("Cidade não encontrada");
   const { latitude, longitude, name, country } = geoD.results[0];
   const w = await fetchWeatherByCoords(latitude, longitude);
@@ -154,10 +150,16 @@ const S = {
   clothingInfo: { padding: "10px 12px" },
   clothingName: { fontSize: 12, fontWeight: 600, color: "#ccc", marginBottom: 2 },
   clothingDesc: { fontSize: 10, color: "#555", lineHeight: 1.4 },
-  addBtn: { position: "fixed", bottom: 96, right: 20, width: 50, height: 50, borderRadius: "50%", background: "#FF5C00", border: "none", color: "#fff", fontSize: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px #FF5C0055" },
+  clothingActions: { display: "flex", gap: 8, marginTop: 6 },
+  editBtn: { background: "none", border: "none", color: "#FF5C00", fontSize: 11, cursor: "pointer", padding: 0, fontWeight: 600 },
+  deleteBtn: { background: "none", border: "none", color: "#FF5C0044", fontSize: 11, cursor: "pointer", padding: 0 },
+  fabRow: { position: "fixed", bottom: 96, right: 20, display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end" },
+  fabBtn: (secondary) => ({ width: 50, height: 50, borderRadius: "50%", background: secondary ? "#1A1A1A" : "#FF5C00", border: secondary ? "1px solid #2A2A2A" : "none", color: secondary ? "#888" : "#fff", fontSize: secondary ? 20 : 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: secondary ? "none" : "0 4px 20px #FF5C0055" }),
   overlay: { position: "fixed", inset: 0, background: "#000000cc", zIndex: 100, display: "flex", alignItems: "flex-end" },
-  modal: { background: "#141414", borderRadius: "20px 20px 0 0", padding: "24px 20px 44px", width: "100%", maxHeight: "88vh", overflowY: "auto" },
-  modalTitle: { fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 20 },
+  modal: { background: "#141414", borderRadius: "20px 20px 0 0", padding: "0 20px 44px", width: "100%", maxHeight: "92vh", overflowY: "auto" },
+  modalHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 0 16px", position: "sticky", top: 0, background: "#141414", zIndex: 1 },
+  modalTitle: { fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: "#fff" },
+  modalCloseBtn: { width: 36, height: 36, borderRadius: "50%", background: "#2A2A2A", border: "none", color: "#aaa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   input: { width: "100%", background: "#1A1A1A", border: "1px solid #252525", borderRadius: 12, padding: "14px 16px", color: "#fff", fontSize: 15, marginBottom: 12, boxSizing: "border-box", outline: "none" },
   textarea: { width: "100%", background: "#1A1A1A", border: "1px solid #252525", borderRadius: 12, padding: "14px 16px", color: "#fff", fontSize: 15, marginBottom: 12, boxSizing: "border-box", outline: "none", resize: "none", minHeight: 72 },
   label: { fontSize: 11, color: "#555", marginBottom: 6, display: "block", textTransform: "uppercase", letterSpacing: "0.06em" },
@@ -184,9 +186,11 @@ export default function App() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null); // null = new, item = editing
   const [activeCat, setActiveCat] = useState("tenis");
   const [form, setForm] = useState({ name: "", description: "", category: "tenis", photo: null });
   const fileRef = useRef();
+  const importRef = useRef();
 
   useEffect(() => { setWardrobe(loadWardrobe()); }, []);
   useEffect(() => { tryGeo(); }, []);
@@ -199,8 +203,7 @@ export default function App() {
         navigator.geolocation.getCurrentPosition(res, rej, { timeout: 6000 })
       );
       const w = await fetchWeatherByCoords(pos.coords.latitude, pos.coords.longitude);
-      w.desc = weatherDesc(w.code);
-      w.cityName = "Sua localização";
+      w.desc = weatherDesc(w.code); w.cityName = "Sua localização";
       setWeather(w);
     } catch { /* silent */ }
     setWeatherLoading(false);
@@ -211,15 +214,13 @@ export default function App() {
     setWeatherLoading(true); setWeatherError(null);
     try {
       const w = await fetchWeatherByCity(cityInput.trim());
-      w.desc = weatherDesc(w.code);
-      setWeather(w); setCityInput("");
+      w.desc = weatherDesc(w.code); setWeather(w); setCityInput("");
     } catch (e) { setWeatherError(e.message || "Cidade não encontrada."); }
     setWeatherLoading(false);
   }
 
   function handleManualWeather() {
-    const temp = parseInt(manualTemp);
-    if (isNaN(temp)) return;
+    const temp = parseInt(manualTemp); if (isNaN(temp)) return;
     setWeather({ temp, code: parseInt(manualCond), wind: 0, desc: weatherDesc(parseInt(manualCond)), cityName: "Manual" });
   }
 
@@ -239,6 +240,45 @@ export default function App() {
 
   const filteredWardrobe = wardrobe.filter(i => i.category === activeCat);
 
+  function openAddModal() {
+    setEditingItem(null);
+    setForm({ name: "", description: "", category: activeCat, photo: null });
+    setShowModal(true);
+  }
+
+  function openEditModal(item) {
+    setEditingItem(item);
+    setForm({ name: item.name, description: item.description, category: item.category, photo: item.photo || null });
+    setShowModal(true);
+  }
+
+  function closeModal() { setShowModal(false); setEditingItem(null); }
+
+  function handlePhoto(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setForm(f => ({ ...f, photo: ev.target.result }));
+    reader.readAsDataURL(file);
+  }
+
+  function handleSave() {
+    if (!form.name) return;
+    let updated;
+    if (editingItem) {
+      updated = wardrobe.map(i => i.id === editingItem.id ? { ...i, name: form.name, description: form.description, category: form.category, photo: form.photo } : i);
+    } else {
+      const item = { id: Date.now().toString(), name: form.name, description: form.description, category: form.category, photo: form.photo };
+      updated = [...wardrobe, item];
+    }
+    setWardrobe(updated); saveWardrobe(updated); closeModal();
+  }
+
+  function handleDelete(id) {
+    if (!window.confirm("Remover esta peça?")) return;
+    const updated = wardrobe.filter(i => i.id !== id);
+    setWardrobe(updated); saveWardrobe(updated);
+  }
+
   function handleImportJSON(e) {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
@@ -251,27 +291,7 @@ export default function App() {
       } catch { alert("Erro ao importar. Verifique o arquivo JSON."); }
     };
     reader.readAsText(file);
-  }
-
-  function openAddModal() { setForm({ name: "", description: "", category: activeCat, photo: null }); setShowModal(true); }
-
-  function handlePhoto(e) {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => setForm(f => ({ ...f, photo: ev.target.result }));
-    reader.readAsDataURL(file);
-  }
-
-  function handleSave() {
-    if (!form.name) return;
-    const item = { id: Date.now().toString(), name: form.name, description: form.description, category: form.category, photo: form.photo };
-    const updated = [...wardrobe, item];
-    setWardrobe(updated); saveWardrobe(updated); setShowModal(false);
-  }
-
-  function handleDelete(id) {
-    const updated = wardrobe.filter(i => i.id !== id);
-    setWardrobe(updated); saveWardrobe(updated);
+    e.target.value = "";
   }
 
   const canGenerate = workout && wardrobe.length >= 3 && weather && !generating;
@@ -292,6 +312,7 @@ export default function App() {
         <div style={{ fontSize: 11, color: "#444" }}>{wardrobe.length} peças</div>
       </div>
 
+      {/* ── SUGGEST ── */}
       {tab === "suggest" && (
         <>
           <div style={S.section}>
@@ -315,7 +336,6 @@ export default function App() {
                 </div>
               )}
               {weatherError && <div style={{ color: "#FF7A50", fontSize: 12, marginBottom: 10 }}>{weatherError}</div>}
-
               <div style={{ ...S.manualLabel, marginBottom: 6 }}>Buscar por cidade</div>
               <div style={S.weatherInputRow}>
                 <input style={S.weatherInput} placeholder="Ex: São Paulo..." value={cityInput}
@@ -323,11 +343,9 @@ export default function App() {
                 <button style={S.weatherSmallBtn} onClick={handleCitySearch}>{weatherLoading ? "..." : "Buscar"}</button>
                 <button style={S.weatherGeoBtn} onClick={tryGeo}>📍</button>
               </div>
-
               <div style={S.divider}>
                 <div style={S.dividerLine} /><div style={S.dividerText}>ou insira manualmente</div><div style={S.dividerLine} />
               </div>
-
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div>
                   <div style={S.manualLabel}>Temperatura (°C)</div>
@@ -408,6 +426,7 @@ export default function App() {
         </>
       )}
 
+      {/* ── WARDROBE ── */}
       {tab === "wardrobe" && (
         <>
           <div style={S.section}>
@@ -433,28 +452,27 @@ export default function App() {
                     <div style={S.clothingInfo}>
                       <div style={S.clothingName}>{item.name}</div>
                       <div style={S.clothingDesc}>{item.description}</div>
-                      <button onClick={() => handleDelete(item.id)}
-                        style={{ background: "none", border: "none", color: "#FF5C0066", fontSize: 11, cursor: "pointer", marginTop: 6, padding: 0 }}>
-                        Remover
-                      </button>
+                      <div style={S.clothingActions}>
+                        <button style={S.editBtn} onClick={() => openEditModal(item)}>✏️ Editar</button>
+                        <button style={S.deleteBtn} onClick={() => handleDelete(item.id)}>Remover</button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-          <input type="file" accept=".json" style={{ display: "none" }} id="importJson" onChange={handleImportJSON} />
-          <div style={{ position: "fixed", bottom: 96, right: 80, display: "flex", gap: 10 }}>
-            <button
-              style={{ ...S.addBtn, position: "static", background: "#1A1A1A", border: "1px solid #2A2A2A", fontSize: 18 }}
-              onClick={() => document.getElementById("importJson").click()}
-              title="Importar JSON"
-            >📥</button>
-            <button style={{ ...S.addBtn, position: "static" }} onClick={openAddModal}>+</button>
+
+          {/* FAB buttons */}
+          <input ref={importRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportJSON} />
+          <div style={S.fabRow}>
+            <button style={S.fabBtn(false)} onClick={openAddModal} title="Adicionar peça">+</button>
+            <button style={S.fabBtn(true)} onClick={() => importRef.current.click()} title="Importar JSON">📥</button>
           </div>
         </>
       )}
 
+      {/* Tab bar */}
       <div style={S.tabBar}>
         <button style={S.tab(tab === "suggest")} onClick={() => setTab("suggest")}>
           <span style={S.tabIcon}>✦</span>SUGERIR
@@ -464,10 +482,15 @@ export default function App() {
         </button>
       </div>
 
+      {/* Modal — Add / Edit */}
       {showModal && (
-        <div style={S.overlay} onClick={e => e.target === e.currentTarget && setShowModal(false)}>
+        <div style={S.overlay} onClick={e => e.target === e.currentTarget && closeModal()}>
           <div style={S.modal}>
-            <div style={S.modalTitle}>Adicionar peça</div>
+            <div style={S.modalHeader}>
+              <div style={S.modalTitle}>{editingItem ? "Editar peça" : "Adicionar peça"}</div>
+              <button style={S.modalCloseBtn} onClick={closeModal}>✕</button>
+            </div>
+
             <label style={S.label}>Categoria</label>
             <div style={S.catSelectGrid}>
               {CATEGORIES.map(c => (
@@ -477,20 +500,31 @@ export default function App() {
                 </button>
               ))}
             </div>
+
             <label style={S.label}>Foto</label>
             <div style={S.photoUpload} onClick={() => fileRef.current.click()}>
               {form.photo ? <img src={form.photo} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="preview" />
-                : <><div style={{ fontSize: 30, marginBottom: 6 }}>📷</div><div style={{ fontSize: 12, color: "#444" }}>Toque para adicionar foto</div></>}
+                : <><div style={{ fontSize: 30, marginBottom: 6 }}>📷</div><div style={{ fontSize: 12, color: "#444" }}>Toque para {editingItem?.photo ? "trocar" : "adicionar"} foto</div></>}
               <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
             </div>
+
+            {form.photo && (
+              <button onClick={() => setForm(f => ({ ...f, photo: null }))}
+                style={{ background: "none", border: "none", color: "#FF5C0088", fontSize: 12, cursor: "pointer", marginBottom: 12, padding: 0 }}>
+                Remover foto
+              </button>
+            )}
+
             <label style={S.label}>Nome da peça</label>
             <input style={S.input} placeholder="Ex: Nike Air Zoom Pegasus" value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+
             <label style={S.label}>Descrição (cores, detalhes)</label>
             <textarea style={S.textarea} placeholder="Ex: Cinza claro com detalhes azul marinho" value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+
             <button style={{ ...S.saveBtn, opacity: form.name ? 1 : 0.4 }} onClick={handleSave} disabled={!form.name}>
-              Salvar peça
+              {editingItem ? "Salvar alterações" : "Salvar peça"}
             </button>
           </div>
         </div>
