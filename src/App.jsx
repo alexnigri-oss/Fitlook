@@ -92,10 +92,10 @@ REGRAS:
 Responda APENAS em JSON válido, sem markdown:
 {"looks":[{"title":"nome criativo","style":"Monocromático|Colorido|Color Block|Tonal|Statement","description":"frase sobre a estética","items":{"camiseta":"ID ou null","shorts":"ID ou null","calca":"ID ou null","casaco":"ID ou null","tenis":"ID ou null","meia":"ID ou null"}}]}`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("/api/suggest", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ prompt }),
   });
   const data = await response.json();
   const text = data.content?.find(b => b.type === "text")?.text || "{}";
